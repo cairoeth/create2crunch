@@ -188,7 +188,7 @@ static inline void keccakf(ulong *a)
 #undef o
 }
 
-#define hasLeading(d) (!(((uint*)d)[0]) && ((((uint*)d)[1] & 0x000000ffu) == 0x00000044u))
+#define hasLeading(d) ((d[0] == 0x00) && (d[1] == 0x00) && (d[2] == 0x00) && (d[3] == 0x00) && (d[4] == 0x00) && (d[5] == 0x44))
 
 __kernel void hashMessage(
   __constant uchar const *d_message,
