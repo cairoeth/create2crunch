@@ -43,8 +43,7 @@ pub struct Config {
     pub calling_address: [u8; 20],
     pub init_code_hash: [u8; 32],
     pub gpu_device: u8,
-    pub leading_zeroes_threshold: u8,
-    pub total_zeroes_threshold: u8,
+    pub leading_zeroes_threshold: u8
 }
 
 /// Validate the provided arguments and construct the Config struct.
@@ -70,10 +69,6 @@ impl Config {
         let leading_zeroes_threshold_string = match args.next() {
             Some(arg) => arg,
             None => String::from("3"),
-        };
-        let total_zeroes_threshold_string = match args.next() {
-            Some(arg) => arg,
-            None => String::from("5"),
         };
 
         // convert main arguments from hex string to vector of bytes
@@ -105,15 +100,9 @@ impl Config {
         let Ok(leading_zeroes_threshold) = leading_zeroes_threshold_string.parse::<u8>() else {
             return Err("invalid leading zeroes threshold value supplied");
         };
-        let Ok(total_zeroes_threshold) = total_zeroes_threshold_string.parse::<u8>() else {
-            return Err("invalid total zeroes threshold value supplied");
-        };
 
         if leading_zeroes_threshold > 20 {
             return Err("invalid value for leading zeroes threshold argument. (valid: 0..=20)");
-        }
-        if total_zeroes_threshold > 20 && total_zeroes_threshold != 255 {
-            return Err("invalid value for total zeroes threshold argument. (valid: 0..=20 | 255)");
         }
 
         Ok(Self {
@@ -121,8 +110,7 @@ impl Config {
             calling_address,
             init_code_hash,
             gpu_device,
-            leading_zeroes_threshold,
-            total_zeroes_threshold,
+            leading_zeroes_threshold
         })
     }
 }
@@ -184,25 +172,16 @@ pub fn cpu(config: Config) -> Result<(), Box<dyn Error>> {
                 // get the address that results from the hash
                 let address = <&Address>::try_from(&res[12..]).unwrap();
 
-                // count total and leading zero bytes
-                let mut total = 0;
                 let mut leading = 21;
                 for (i, &b) in address.iter().enumerate() {
-                    if b == 0 {
-                        total += 1;
-                    } else if leading == 21 {
+                    if leading == 21 {
                         // set leading on finding non-zero byte
                         leading = i;
                     }
                 }
 
-                // only proceed if there are at least three zero bytes
-                if total < 3 {
-                    return;
-                }
-
                 // look up the reward amount
-                let key = leading * 20 + total;
+                let key = leading * 20;
                 let reward_amount = rewards.get(&key);
 
                 // only proceed if an efficient address has been found
@@ -425,11 +404,10 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
                 // display information about the current search criteria
                 term.write_line(&format!(
                     "current search space: {}xxxxxxxx{:08x}\t\t\
-                     threshold: {} leading or {} total zeroes",
+                     threshold: {} leading with 44 after",
                     hex::encode(salt),
                     BigEndian::read_u64(&view_buf),
-                    config.leading_zeroes_threshold,
-                    config.total_zeroes_threshold
+                    config.leading_zeroes_threshold
                 ))?;
 
                 // display recently found solutions based on terminal height
@@ -507,19 +485,16 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
             // get the address that results from the hash
             let address = <&Address>::try_from(&res[12..]).unwrap();
 
-            // count total and leading zero bytes
-            let mut total = 0;
+            // count leading zero bytes
             let mut leading = 0;
             for (i, &b) in address.iter().enumerate() {
-                if b == 0 {
-                    total += 1;
-                } else if leading == 0 {
+                if leading == 0 {
                     // set leading on finding non-zero byte
                     leading = i;
                 }
             }
 
-            let key = leading * 20 + total;
+            let key = leading * 20;
             let reward = rewards.get(&key).unwrap_or("0");
             let output = format!(
                 "0x{}{}{} => {} => {}",
@@ -530,7 +505,7 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
                 reward,
             );
 
-            let show = format!("{output} ({leading} / {total})");
+            let show = format!("{output} ({leading})");
             found_list.push(show.to_string());
 
             file.lock_exclusive().expect("Couldn't lock file.");
@@ -567,8 +542,6 @@ fn mk_kernel_src(config: &Config) -> String {
     }
     let lz = config.leading_zeroes_threshold;
     writeln!(src, "#define LEADING_ZEROES {lz}").unwrap();
-    let tz = config.total_zeroes_threshold;
-    writeln!(src, "#define TOTAL_ZEROES {tz}").unwrap();
 
     src.push_str(KERNEL_SRC);
 
